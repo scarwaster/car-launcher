@@ -7,6 +7,8 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.text.TextUtils
 import android.view.Gravity
@@ -15,6 +17,10 @@ import android.view.ViewGroup
 import android.widget.*
 
 class MainActivity : Activity() {
+
+    companion object {
+        private var didAutoStartRadio = false
+    }
 
     data class AppInfo(val label: String, val packageName: String, val icon: Drawable)
 
@@ -64,15 +70,47 @@ class MainActivity : Activity() {
         }
 
         btnMenu.setOnClickListener {
+            val autoRadio = prefs.getBoolean("auto_radio", true)
+            val autoLabel = if (autoRadio) {
+                "Auto-iniciar Rádio: Ligado"
+            } else {
+                "Auto-iniciar Rádio: Desligado"
+            }
             AlertDialog.Builder(this)
-                .setItems(arrayOf("Todos os Aplicativos", "Ajustes do Android")) { _, which ->
-                    if (which == 0) {
-                        openAppPicker(prefKey = null, title = "Todos os Aplicativos")
-                    } else {
-                        startActivity(Intent(Settings.ACTION_SETTINGS))
+                .setItems(arrayOf("Todos os Aplicativos", autoLabel, "Ajustes do Android")) { _, which ->
+                    when (which) {
+                        0 -> openAppPicker(prefKey = null, title = "Todos os Aplicativos")
+                        1 -> {
+                            val next = !autoRadio
+                            prefs.edit().putBoolean("auto_radio", next).apply()
+                            Toast.makeText(
+                                this,
+                                if (next) "Rádio iniciará automaticamente" else "Auto-início do Rádio desligado",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        2 -> startActivity(Intent(Settings.ACTION_SETTINGS))
                     }
                 }
                 .show()
+        }
+
+        // Inicia o Rádio e volta para o Launcher deixando tocando em background
+        val autoRadio = prefs.getBoolean("auto_radio", true)
+        val savedRadio = prefs.getString("pkg_radio", null)
+        if (autoRadio && savedRadio != null && !didAutoStartRadio) {
+            didAutoStartRadio = true
+            if (launchApp(savedRadio)) {
+                Handler(Looper.getMainLooper()).postDelayed({
+                    try {
+                        val homeIntent = Intent(this, MainActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        }
+                        startActivity(homeIntent)
+                    } catch (_: Exception) {
+                    }
+                }, 1800)
+            }
         }
     }
 
